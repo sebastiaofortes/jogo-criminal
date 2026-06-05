@@ -75,7 +75,8 @@ app.post('/api/scenes', (req, res) => {
     objects:     [],
     nextSceneId: null,
     music:       null,
-    clickSound:  null
+    clickSound:  null,
+    buttons:     []
   };
   data.scenes.push(scene);
   writeScenes(data);
