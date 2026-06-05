@@ -55,8 +55,9 @@ app.post('/api/scenes', (req, res) => {
     id:        crypto.randomUUID(),
     name:      name.trim(),
     createdAt: new Date().toISOString(),
-    background: 'fundos/fundo-2d.png',
-    objects:   []   // reservado para posições futuras de objetos
+    background:  'fundos/fundo-2d.png',
+    objects:     [],
+    nextSceneId: null
   };
   data.scenes.push(scene);
   writeScenes(data);

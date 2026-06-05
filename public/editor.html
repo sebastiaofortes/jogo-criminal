@@ -184,6 +184,34 @@
 
     #controls textarea:focus { border-color: rgba(91,156,246,0.5); }
 
+    #scene-settings {
+      background: rgba(15,15,15,0.8);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 8px;
+      backdrop-filter: blur(6px);
+      padding: 10px 12px;
+    }
+
+    .settings-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+
+    #next-scene-select {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.85);
+      font-size: 12px;
+      padding: 6px 8px;
+      cursor: pointer;
+      outline: none;
+    }
+
     .hidden { display: none !important; }
   </style>
 </head>
@@ -199,6 +227,13 @@
     <div id="edit-tools" class="btn-group">
       <button class="btn" id="upload-btn">+ Imagem</button>
       <button class="btn" id="bg-btn">&#x1F5BC; Fundo</button>
+    </div>
+
+    <div id="scene-settings">
+      <div class="settings-label">Próxima cena</div>
+      <select id="next-scene-select">
+        <option value="">— nenhuma —</option>
+      </select>
     </div>
 
     <div id="controls">
@@ -221,6 +256,20 @@
       <div class="control-row">
         <div class="control-label">Descrição</div>
         <textarea id="desc-input" placeholder="Adicione uma descrição..." rows="3"></textarea>
+      </div>
+
+      <div class="control-row">
+        <label class="control-label" style="cursor:pointer; user-select:none">
+          Sumir após visualizar
+          <input type="checkbox" id="disappear-input" style="cursor:pointer">
+        </label>
+      </div>
+
+      <div class="control-row">
+        <label class="control-label" style="cursor:pointer; user-select:none">
+          Necessário para avançar
+          <input type="checkbox" id="required-input" style="cursor:pointer">
+        </label>
       </div>
 
       <div class="control-row">
@@ -247,15 +296,20 @@
 
   <script>
     // ── Estado ─────────────────────────────────────────────────────────────────
-    let sceneId    = null;
-    let selectedEl = null;
-    let imageCount = 0;
-    let viewMode   = false;
+    let sceneId            = null;
+    let selectedEl         = null;
+    let imageCount         = 0;
+    let viewMode           = false;
+    let pendingDisappearEl = null;
+    let nextSceneId        = null;
+    let clickedRequiredIds = new Set();
+    let lastClickedEl      = null;
 
     // ── Modo visualização ──────────────────────────────────────────────────────
     function setViewMode(on) {
       viewMode = on;
       document.getElementById('edit-tools').classList.toggle('hidden', on);
+      document.getElementById('scene-settings').classList.toggle('hidden', on);
       document.getElementById('controls').classList.toggle('hidden', on);
       if (on) selectedEl = null;
     }
@@ -265,16 +319,42 @@
       const desc = (el.dataset.objDescription || '').trim();
       document.getElementById('click-dialog-text').textContent =
         desc || 'Sem descrição.';
+      pendingDisappearEl = el.dataset.objDisappear === 'true' ? el : null;
+      lastClickedEl = el;
       document.getElementById('click-dialog').classList.add('open');
     }
 
-    document.getElementById('click-dialog-close').addEventListener('click', () =>
-      document.getElementById('click-dialog').classList.remove('open')
+    function closeClickDialog() {
+      document.getElementById('click-dialog').classList.remove('open');
+      if (pendingDisappearEl) {
+        pendingDisappearEl.object3D.visible = false;
+        pendingDisappearEl = null;
+      }
+      if (lastClickedEl && lastClickedEl.dataset.objRequired === 'true') {
+        clickedRequiredIds.add(lastClickedEl.dataset.objId);
+        lastClickedEl = null;
+        checkCompletion();
+      }
+    }
+
+    function checkCompletion() {
+      if (!nextSceneId) return;
+      const requiredEls = Array.from(
+        document.querySelectorAll('a-image[drag-move]')
+      ).filter(el => el.dataset.objRequired === 'true');
+      if (requiredEls.length === 0) return;
+      if (requiredEls.every(el => clickedRequiredIds.has(el.dataset.objId))) {
+        window.location.href = `/editor.html?id=${nextSceneId}&mode=view`;
+      }
+    }
+
+    document.getElementById('click-dialog-close').addEventListener('click',
+      closeClickDialog
     );
 
     document.getElementById('click-dialog').addEventListener('click', e => {
       if (e.target === document.getElementById('click-dialog'))
-        document.getElementById('click-dialog').classList.remove('open');
+        closeClickDialog();
     });
 
     // ── Init: carrega cena da API ──────────────────────────────────────────────
@@ -289,8 +369,31 @@
       const scene = await res.json();
       document.title = scene.name;
       document.getElementById('scene-name').textContent = scene.name;
+      nextSceneId = scene.nextSceneId || null;
 
-      if (params.get('mode') === 'view') setViewMode(true);
+      if (params.get('mode') === 'view') {
+        setViewMode(true);
+      } else {
+        const allScenes = await fetch('/api/scenes').then(r => r.json());
+        const sel = document.getElementById('next-scene-select');
+        allScenes
+          .filter(s => s.id !== sceneId)
+          .forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            if (s.id === nextSceneId) opt.selected = true;
+            sel.appendChild(opt);
+          });
+        sel.addEventListener('change', async function () {
+          nextSceneId = this.value || null;
+          await fetch(`/api/scenes/${sceneId}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ nextSceneId })
+          });
+        });
+      }
 
       const aScene = document.querySelector('a-scene');
       const onReady = () => {
@@ -337,7 +440,9 @@
           el.setAttribute('drag-move', '');
           el.dataset.objId          = obj.id;
           el.dataset.objSrc         = obj.src;
-          el.dataset.objDescription = obj.description || '';
+          el.dataset.objDescription = obj.description    || '';
+          el.dataset.objDisappear   = obj.disappearOnClick ? 'true' : 'false';
+          el.dataset.objRequired    = obj.isRequired       ? 'true' : 'false';
           el.userData = { imgNum: imageCount, rotZ: obj.rotZ || 0 };
           document.querySelector('a-scene').appendChild(el);
 
@@ -366,7 +471,9 @@
           rotZ:        el.userData.rotZ || 0,
           width:       parseFloat(el.getAttribute('width')),
           height:      parseFloat(el.getAttribute('height')),
-          description: el.dataset.objDescription || ''
+          description:      el.dataset.objDescription || '',
+          disappearOnClick: el.dataset.objDisappear === 'true',
+          isRequired:       el.dataset.objRequired   === 'true'
         };
       });
       await fetch(`/api/scenes/${sceneId}`, {
@@ -471,12 +578,26 @@
       document.getElementById('scale-val').textContent    = s.toFixed(1) + '×';
       document.getElementById('rotation-val').textContent = rDeg + '°';
       document.getElementById('desc-input').value = el.dataset.objDescription || '';
+      document.getElementById('disappear-input').checked = el.dataset.objDisappear === 'true';
+      document.getElementById('required-input').checked  = el.dataset.objRequired  === 'true';
     }
 
     // ── Descrição ──────────────────────────────────────────────────────────────
     document.getElementById('desc-input').addEventListener('blur', function () {
       if (!selectedEl) return;
       selectedEl.dataset.objDescription = this.value;
+      saveObjects();
+    });
+
+    document.getElementById('disappear-input').addEventListener('change', function () {
+      if (!selectedEl) return;
+      selectedEl.dataset.objDisappear = this.checked ? 'true' : 'false';
+      saveObjects();
+    });
+
+    document.getElementById('required-input').addEventListener('change', function () {
+      if (!selectedEl) return;
+      selectedEl.dataset.objRequired = this.checked ? 'true' : 'false';
       saveObjects();
     });
 
@@ -553,6 +674,8 @@
         el.dataset.objId          = crypto.randomUUID();
         el.dataset.objSrc         = objPath;
         el.dataset.objDescription = '';
+        el.dataset.objDisappear   = 'false';
+        el.dataset.objRequired    = 'false';
         el.userData = { imgNum: num, rotZ: 0 };
         document.querySelector('a-scene').appendChild(el);
         selectImage(el);
