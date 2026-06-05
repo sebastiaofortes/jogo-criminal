@@ -290,7 +290,7 @@
     <a-assets id="assets"></a-assets>
     <a-sky id="sky" rotation="0 -130 0"></a-sky>
     <a-camera id="cam" look-controls="pointerLockEnabled: false">
-      <a-cursor raycaster="objects: .draggable; far: 20" color="#ffffff" opacity="0.8"></a-cursor>
+      <a-cursor id="cursor" cursor="rayOrigin: mouse" raycaster="objects: .draggable; far: 20" color="#ffffff" opacity="0"></a-cursor>
     </a-camera>
   </a-scene>
 
@@ -312,6 +312,12 @@
       document.getElementById('scene-settings').classList.toggle('hidden', on);
       document.getElementById('controls').classList.toggle('hidden', on);
       if (on) selectedEl = null;
+
+      // Modo edição: raycaster segue o mouse (clique direto nos objetos)
+      // Modo visualização: raycaster no centro da tela (mira com a câmera)
+      const cursorEl = document.querySelector('#cursor');
+      cursorEl.setAttribute('cursor', on ? 'rayOrigin: entity' : 'rayOrigin: mouse');
+      cursorEl.setAttribute('opacity', on ? '0.8' : '0');
     }
 
     // ── Dialog "você clicou" ───────────────────────────────────────────────────
