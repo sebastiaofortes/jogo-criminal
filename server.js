@@ -23,8 +23,10 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Uploads ────────────────────────────────────────────────────────────────
-const uploadBg  = multer({ dest: path.join(__dirname, 'public/fundos/') });
-const uploadObj = multer({ dest: path.join(__dirname, 'public/objects/') });
+const uploadBg     = multer({ dest: path.join(__dirname, 'public/fundos/') });
+const uploadObj    = multer({ dest: path.join(__dirname, 'public/objects/') });
+const uploadMusic  = multer({ dest: path.join(__dirname, 'public/music/') });
+const uploadSounds = multer({ dest: path.join(__dirname, 'public/sounds/') });
 
 app.post('/api/upload/background', uploadBg.single('file'), (req, res) => {
   const ext     = path.extname(req.file.originalname);
@@ -38,6 +40,20 @@ app.post('/api/upload/object', uploadObj.single('file'), (req, res) => {
   const newPath = req.file.path + ext;
   fs.renameSync(req.file.path, newPath);
   res.json({ path: 'objects/' + path.basename(newPath) });
+});
+
+app.post('/api/upload/music', uploadMusic.single('file'), (req, res) => {
+  const ext     = path.extname(req.file.originalname);
+  const newPath = req.file.path + ext;
+  fs.renameSync(req.file.path, newPath);
+  res.json({ path: 'music/' + path.basename(newPath) });
+});
+
+app.post('/api/upload/clicksound', uploadSounds.single('file'), (req, res) => {
+  const ext     = path.extname(req.file.originalname);
+  const newPath = req.file.path + ext;
+  fs.renameSync(req.file.path, newPath);
+  res.json({ path: 'sounds/' + path.basename(newPath) });
 });
 
 // ── CRUD de cenas ──────────────────────────────────────────────────────────
@@ -57,7 +73,9 @@ app.post('/api/scenes', (req, res) => {
     createdAt: new Date().toISOString(),
     background:  'fundos/fundo-2d.png',
     objects:     [],
-    nextSceneId: null
+    nextSceneId: null,
+    music:       null,
+    clickSound:  null
   };
   data.scenes.push(scene);
   writeScenes(data);

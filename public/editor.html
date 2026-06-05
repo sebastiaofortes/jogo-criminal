@@ -212,6 +212,50 @@
       outline: none;
     }
 
+    .settings-divider {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      margin: 10px 0;
+    }
+
+    #music-name {
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 6px;
+    }
+
+    #music-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-music {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.8);
+      font-size: 12px;
+      padding: 6px 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-music:hover { background: rgba(255,255,255,0.12); }
+
+    .btn-music-remove {
+      background: rgba(239,68,68,0.12);
+      border-color: rgba(239,68,68,0.3);
+      color: rgba(239,68,68,0.8);
+      flex: none;
+      padding: 6px 10px;
+    }
+
+    .btn-music-remove:hover { background: rgba(239,68,68,0.22); }
+
     .hidden { display: none !important; }
   </style>
 </head>
@@ -229,11 +273,31 @@
       <button class="btn" id="bg-btn">&#x1F5BC; Fundo</button>
     </div>
 
+    <input id="music-input"      type="file" accept="audio/*" style="display:none">
+    <input id="clicksound-input" type="file" accept="audio/*" style="display:none">
     <div id="scene-settings">
       <div class="settings-label">Próxima cena</div>
       <select id="next-scene-select">
         <option value="">— nenhuma —</option>
       </select>
+
+      <hr class="settings-divider">
+
+      <div class="settings-label">Música de fundo</div>
+      <div id="music-name">Nenhuma</div>
+      <div id="music-row">
+        <button class="btn-music" id="music-btn">+ Áudio</button>
+        <button class="btn-music btn-music-remove hidden" id="music-remove-btn">✕</button>
+      </div>
+
+      <hr class="settings-divider">
+
+      <div class="settings-label">Som ao clicar objeto</div>
+      <div id="clicksound-name">Nenhum</div>
+      <div id="clicksound-row">
+        <button class="btn-music" id="clicksound-btn">+ Áudio</button>
+        <button class="btn-music btn-music-remove hidden" id="clicksound-remove-btn">✕</button>
+      </div>
     </div>
 
     <div id="controls">
@@ -304,6 +368,9 @@
     let nextSceneId        = null;
     let clickedRequiredIds = new Set();
     let lastClickedEl      = null;
+    let bgAudio            = null;
+    let audioCtx           = null;
+    let clickSoundBuffer   = null;
 
     // ── Modo visualização ──────────────────────────────────────────────────────
     function setViewMode(on) {
@@ -322,6 +389,7 @@
 
     // ── Dialog "você clicou" ───────────────────────────────────────────────────
     function openClickDialog(el) {
+      playClickSound();
       const desc = (el.dataset.objDescription || '').trim();
       document.getElementById('click-dialog-text').textContent =
         desc || 'Sem descrição.';
@@ -350,8 +418,59 @@
       ).filter(el => el.dataset.objRequired === 'true');
       if (requiredEls.length === 0) return;
       if (requiredEls.every(el => clickedRequiredIds.has(el.dataset.objId))) {
+        stopMusic();
         window.location.href = `/editor.html?id=${nextSceneId}&mode=view`;
       }
+    }
+
+    // ── Música ─────────────────────────────────────────────────────────────────
+    function startMusic(path) {
+      if (!path) return;
+      bgAudio = new Audio(path);
+      bgAudio.loop = true;
+      bgAudio.volume = 0.5;
+      bgAudio.play().catch(() => {});
+    }
+
+    function stopMusic() {
+      if (!bgAudio) return;
+      bgAudio.pause();
+      bgAudio = null;
+    }
+
+    function updateMusicUI(musicPath) {
+      const name = musicPath
+        ? decodeURIComponent(musicPath.split('/').pop().replace(/^[a-f0-9]+\./, ''))
+        : 'Nenhuma';
+      document.getElementById('music-name').textContent = name;
+      document.getElementById('music-remove-btn').classList.toggle('hidden', !musicPath);
+    }
+
+    async function loadClickSound(soundPath) {
+      if (!soundPath) return;
+      try {
+        audioCtx = audioCtx || new AudioContext();
+        const res = await fetch(soundPath);
+        const buf = await res.arrayBuffer();
+        clickSoundBuffer = await audioCtx.decodeAudioData(buf);
+      } catch (e) {}
+    }
+
+    function playClickSound() {
+      if (!audioCtx || !clickSoundBuffer) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const src = audioCtx.createBufferSource();
+      src.buffer = clickSoundBuffer;
+      src.connect(audioCtx.destination);
+      src.start();
+    }
+
+    function updateClickSoundUI(soundPath) {
+      const name = soundPath
+        ? decodeURIComponent(soundPath.split('/').pop().replace(/^[a-f0-9]+\./, ''))
+        : 'Nenhum';
+      document.getElementById('clicksound-name').textContent = name;
+      document.getElementById('clicksound-remove-btn').classList.toggle('hidden', !soundPath);
     }
 
     document.getElementById('click-dialog-close').addEventListener('click',
@@ -379,7 +498,11 @@
 
       if (params.get('mode') === 'view') {
         setViewMode(true);
+        startMusic(scene.music || null);
+        loadClickSound(scene.clickSound || null);
       } else {
+        updateMusicUI(scene.music || null);
+        updateClickSoundUI(scene.clickSound || null);
         const allScenes = await fetch('/api/scenes').then(r => r.json());
         const sel = document.getElementById('next-scene-select');
         allScenes
@@ -642,6 +765,72 @@
       selectedEl = null;
       document.getElementById('controls').style.display = 'none';
       saveObjects();
+    });
+
+    // ── Música de fundo ────────────────────────────────────────────────────────
+    document.getElementById('music-btn').onclick = () =>
+      document.getElementById('music-input').click();
+
+    document.getElementById('music-input').addEventListener('change', async function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const form = new FormData();
+      form.append('file', file);
+      const { path: musicPath } = await fetch('/api/upload/music', {
+        method: 'POST', body: form
+      }).then(r => r.json());
+
+      await fetch(`/api/scenes/${sceneId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ music: musicPath })
+      });
+
+      updateMusicUI(musicPath);
+      this.value = '';
+    });
+
+    document.getElementById('music-remove-btn').addEventListener('click', async () => {
+      await fetch(`/api/scenes/${sceneId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ music: null })
+      });
+      updateMusicUI(null);
+    });
+
+    // ── Som de clique ──────────────────────────────────────────────────────────
+    document.getElementById('clicksound-btn').onclick = () =>
+      document.getElementById('clicksound-input').click();
+
+    document.getElementById('clicksound-input').addEventListener('change', async function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const form = new FormData();
+      form.append('file', file);
+      const { path: soundPath } = await fetch('/api/upload/clicksound', {
+        method: 'POST', body: form
+      }).then(r => r.json());
+
+      await fetch(`/api/scenes/${sceneId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ clickSound: soundPath })
+      });
+
+      updateClickSoundUI(soundPath);
+      this.value = '';
+    });
+
+    document.getElementById('clicksound-remove-btn').addEventListener('click', async () => {
+      await fetch(`/api/scenes/${sceneId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ clickSound: null })
+      });
+      updateClickSoundUI(null);
     });
 
     // ── Upload de imagem na cena ───────────────────────────────────────────────

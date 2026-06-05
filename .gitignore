@@ -3,3 +3,7 @@ scenes.json
 .DS_Store
 public/objects/*
 !public/objects/.gitkeep
+public/music/*
+!public/music/.gitkeep
+public/sounds/*
+!public/sounds/.gitkeep
