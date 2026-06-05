@@ -167,6 +167,23 @@
 
     #click-dialog-close:hover { background: rgba(255,255,255,0.15); }
 
+    #controls textarea {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.85);
+      font-size: 12px;
+      padding: 7px 9px;
+      resize: vertical;
+      outline: none;
+      font-family: sans-serif;
+      margin-top: 4px;
+      box-sizing: border-box;
+    }
+
+    #controls textarea:focus { border-color: rgba(91,156,246,0.5); }
+
     .hidden { display: none !important; }
   </style>
 </head>
@@ -202,6 +219,11 @@
       </div>
 
       <div class="control-row">
+        <div class="control-label">Descrição</div>
+        <textarea id="desc-input" placeholder="Adicione uma descrição..." rows="3"></textarea>
+      </div>
+
+      <div class="control-row">
         <button class="btn-remove" id="remove-btn">Remover objeto</button>
       </div>
     </div>
@@ -210,7 +232,7 @@
   <!-- Dialog modo visualização -->
   <div id="click-dialog">
     <div id="click-dialog-box">
-      <p>você clicou</p>
+      <p id="click-dialog-text"></p>
       <button id="click-dialog-close">Fechar</button>
     </div>
   </div>
@@ -239,7 +261,10 @@
     }
 
     // ── Dialog "você clicou" ───────────────────────────────────────────────────
-    function openClickDialog() {
+    function openClickDialog(el) {
+      const desc = (el.dataset.objDescription || '').trim();
+      document.getElementById('click-dialog-text').textContent =
+        desc || 'Sem descrição.';
       document.getElementById('click-dialog').classList.add('open');
     }
 
@@ -310,8 +335,9 @@
           el.setAttribute('scale',    `${obj.scale} ${obj.scale} ${obj.scale}`);
           el.setAttribute('material', 'transparent: true; alphaTest: 0.05');
           el.setAttribute('drag-move', '');
-          el.dataset.objId  = obj.id;
-          el.dataset.objSrc = obj.src;
+          el.dataset.objId          = obj.id;
+          el.dataset.objSrc         = obj.src;
+          el.dataset.objDescription = obj.description || '';
           el.userData = { imgNum: imageCount, rotZ: obj.rotZ || 0 };
           document.querySelector('a-scene').appendChild(el);
 
@@ -333,13 +359,14 @@
       const objects = Array.from(els).map(el => {
         const p = el.object3D.position;
         return {
-          id:       el.dataset.objId,
-          src:      el.dataset.objSrc,
-          position: { x: p.x, y: p.y, z: p.z },
-          scale:    el.object3D.scale.x,
-          rotZ:     el.userData.rotZ || 0,
-          width:    parseFloat(el.getAttribute('width')),
-          height:   parseFloat(el.getAttribute('height'))
+          id:          el.dataset.objId,
+          src:         el.dataset.objSrc,
+          position:    { x: p.x, y: p.y, z: p.z },
+          scale:       el.object3D.scale.x,
+          rotZ:        el.userData.rotZ || 0,
+          width:       parseFloat(el.getAttribute('width')),
+          height:      parseFloat(el.getAttribute('height')),
+          description: el.dataset.objDescription || ''
         };
       });
       await fetch(`/api/scenes/${sceneId}`, {
@@ -362,7 +389,7 @@
         this.el.addEventListener('mousedown', this._down);
         this.el.addEventListener('touchstart', this._down);
         this.el.addEventListener('click', () => {
-          if (viewMode) openClickDialog();
+          if (viewMode) openClickDialog(this.el);
           else selectImage(this.el);
         });
       },
@@ -443,7 +470,15 @@
       document.getElementById('rotation-slider').value = rDeg;
       document.getElementById('scale-val').textContent    = s.toFixed(1) + '×';
       document.getElementById('rotation-val').textContent = rDeg + '°';
+      document.getElementById('desc-input').value = el.dataset.objDescription || '';
     }
+
+    // ── Descrição ──────────────────────────────────────────────────────────────
+    document.getElementById('desc-input').addEventListener('blur', function () {
+      if (!selectedEl) return;
+      selectedEl.dataset.objDescription = this.value;
+      saveObjects();
+    });
 
     // ── Sliders ────────────────────────────────────────────────────────────────
     document.getElementById('scale-slider').addEventListener('input', function () {
@@ -515,8 +550,9 @@
         el.setAttribute('position', '0 1.6 -4');
         el.setAttribute('material', 'transparent: true; alphaTest: 0.05');
         el.setAttribute('drag-move', '');
-        el.dataset.objId  = crypto.randomUUID();
-        el.dataset.objSrc = objPath;
+        el.dataset.objId          = crypto.randomUUID();
+        el.dataset.objSrc         = objPath;
+        el.dataset.objDescription = '';
         el.userData = { imgNum: num, rotZ: 0 };
         document.querySelector('a-scene').appendChild(el);
         selectImage(el);
