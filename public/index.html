@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo Criminal</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0e0e0e;
+      color: #e5e5e5;
+      font-family: sans-serif;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 32px 40px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .btn {
+      background: rgba(255,255,255,0.08);
+      color: #e5e5e5;
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 9px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.15s;
+    }
+
+    .btn:hover { background: rgba(255,255,255,0.14); }
+
+    .btn-primary {
+      background: #2563eb;
+      border-color: transparent;
+      color: white;
+    }
+
+    .btn-primary:hover { background: #1d4ed8; }
+
+    .btn-danger {
+      background: transparent;
+      border-color: rgba(239,68,68,0.4);
+      color: rgba(239,68,68,0.8);
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .btn-danger:hover { background: rgba(239,68,68,0.1); }
+
+    main { padding: 36px 40px; }
+
+    #empty-state {
+      text-align: center;
+      padding: 80px 0;
+      color: rgba(255,255,255,0.3);
+      font-size: 15px;
+    }
+
+    #scenes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .scene-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: border-color 0.15s;
+    }
+
+    .scene-card:hover { border-color: rgba(255,255,255,0.2); }
+
+    .scene-card h3 {
+      font-size: 15px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .scene-card .date {
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+    }
+
+    .scene-card .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+    }
+
+    /* Modal */
+    #modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #modal-overlay.open { display: flex; }
+
+    #modal {
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 28px;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    #modal h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    #modal input[type="text"] {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      color: #e5e5e5;
+      font-size: 14px;
+      padding: 10px 12px;
+      outline: none;
+      margin-bottom: 20px;
+    }
+
+    #modal input[type="text"]:focus {
+      border-color: rgba(37,99,235,0.7);
+    }
+
+    #modal .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    #modal-error {
+      font-size: 12px;
+      color: rgb(239,68,68);
+      margin-top: -14px;
+      margin-bottom: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Jogo Criminal</h1>
+    <button class="btn btn-primary" id="btn-new">+ Nova Cena</button>
+  </header>
+
+  <main>
+    <div id="empty-state" style="display:none">Nenhuma cena criada ainda.</div>
+    <div id="scenes-grid"></div>
+  </main>
+
+  <!-- Modal nova cena -->
+  <div id="modal-overlay">
+    <div id="modal">
+      <h2>Nova Cena</h2>
+      <input type="text" id="scene-name-input" placeholder="Nome da cena" maxlength="80">
+      <div id="modal-error">Informe um nome para a cena.</div>
+      <div class="modal-actions">
+        <button class="btn" id="btn-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="btn-create">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const grid    = document.getElementById('scenes-grid');
+    const empty   = document.getElementById('empty-state');
+    const overlay = document.getElementById('modal-overlay');
+    const input   = document.getElementById('scene-name-input');
+    const errMsg  = document.getElementById('modal-error');
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleDateString('pt-BR', {
+        day: '2-digit', month: 'short', year: 'numeric'
+      });
+    }
+
+    function renderCard(scene) {
+      const card = document.createElement('div');
+      card.className = 'scene-card';
+      card.dataset.id = scene.id;
+      card.innerHTML = `
+        <h3>${escapeHtml(scene.name)}</h3>
+        <span class="date">${formatDate(scene.createdAt)}</span>
+        <div class="actions">
+          <button class="btn" onclick="openScene('${scene.id}')">Abrir</button>
+          <button class="btn btn-danger" onclick="deleteScene('${scene.id}', this)">Excluir</button>
+        </div>
+      `;
+      return card;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function openScene(id) {
+      window.location.href = `/editor.html?id=${id}`;
+    }
+
+    async function deleteScene(id, btn) {
+      if (!confirm('Excluir esta cena?')) return;
+      await fetch(`/api/scenes/${id}`, { method: 'DELETE' });
+      const card = document.querySelector(`.scene-card[data-id="${id}"]`);
+      card && card.remove();
+      updateEmpty();
+    }
+
+    function updateEmpty() {
+      const hasCards = grid.children.length > 0;
+      empty.style.display  = hasCards ? 'none' : 'block';
+      grid.style.display   = hasCards ? 'grid' : 'none';
+    }
+
+    async function loadScenes() {
+      const scenes = await fetch('/api/scenes').then(r => r.json());
+      scenes.forEach(s => grid.appendChild(renderCard(s)));
+      updateEmpty();
+    }
+
+    // Modal
+    document.getElementById('btn-new').onclick = () => {
+      input.value = '';
+      errMsg.style.display = 'none';
+      overlay.classList.add('open');
+      setTimeout(() => input.focus(), 50);
+    };
+
+    document.getElementById('btn-cancel').onclick = () =>
+      overlay.classList.remove('open');
+
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') createScene();
+    });
+
+    document.getElementById('btn-create').onclick = createScene;
+
+    async function createScene() {
+      const name = input.value.trim();
+      if (!name) {
+        errMsg.style.display = 'block';
+        input.focus();
+        return;
+      }
+      errMsg.style.display = 'none';
+      const scene = await fetch('/api/scenes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      }).then(r => r.json());
+
+      overlay.classList.remove('open');
+      window.location.href = `/editor.html?id=${scene.id}`;
+    }
+
+    loadScenes();
+  </script>
+</body>
+</html>
