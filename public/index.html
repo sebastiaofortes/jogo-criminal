@@ -105,6 +105,12 @@
       justify-content: space-between;
       align-items: center;
       margin-top: auto;
+      gap: 6px;
+    }
+
+    .scene-card .actions-left {
+      display: flex;
+      gap: 6px;
     }
 
     /* Modal */
@@ -212,7 +218,10 @@
         <h3>${escapeHtml(scene.name)}</h3>
         <span class="date">${formatDate(scene.createdAt)}</span>
         <div class="actions">
-          <button class="btn" onclick="openScene('${scene.id}')">Abrir</button>
+          <div class="actions-left">
+            <button class="btn" onclick="openScene('${scene.id}')">Abrir</button>
+            <button class="btn" onclick="editScene('${scene.id}')">Editar</button>
+          </div>
           <button class="btn btn-danger" onclick="deleteScene('${scene.id}', this)">Excluir</button>
         </div>
       `;
@@ -224,6 +233,10 @@
     }
 
     function openScene(id) {
+      window.location.href = `/editor.html?id=${id}&mode=view`;
+    }
+
+    function editScene(id) {
       window.location.href = `/editor.html?id=${id}`;
     }
 

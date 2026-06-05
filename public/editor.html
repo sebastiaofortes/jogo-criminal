@@ -122,6 +122,52 @@
     }
 
     .btn-remove:hover { background: rgba(239,68,68,0.28); }
+
+    /* Dialog de clique no modo visualização */
+    #click-dialog {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(3px);
+    }
+
+    #click-dialog.open { display: flex; }
+
+    #click-dialog-box {
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 28px 32px;
+      text-align: center;
+      color: white;
+      font-family: sans-serif;
+      min-width: 220px;
+    }
+
+    #click-dialog-box p {
+      font-size: 16px;
+      margin-bottom: 20px;
+      color: rgba(255,255,255,0.85);
+    }
+
+    #click-dialog-close {
+      background: rgba(255,255,255,0.08);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 8px 24px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+
+    #click-dialog-close:hover { background: rgba(255,255,255,0.15); }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -133,7 +179,7 @@
 
     <input id="file-input" type="file" accept="image/*" style="display:none">
     <input id="bg-input"   type="file" accept="image/*" style="display:none">
-    <div class="btn-group">
+    <div id="edit-tools" class="btn-group">
       <button class="btn" id="upload-btn">+ Imagem</button>
       <button class="btn" id="bg-btn">&#x1F5BC; Fundo</button>
     </div>
@@ -161,6 +207,14 @@
     </div>
   </div>
 
+  <!-- Dialog modo visualização -->
+  <div id="click-dialog">
+    <div id="click-dialog-box">
+      <p>você clicou</p>
+      <button id="click-dialog-close">Fechar</button>
+    </div>
+  </div>
+
   <a-scene>
     <a-assets id="assets"></a-assets>
     <a-sky id="sky" rotation="0 -130 0"></a-sky>
@@ -174,6 +228,29 @@
     let sceneId    = null;
     let selectedEl = null;
     let imageCount = 0;
+    let viewMode   = false;
+
+    // ── Modo visualização ──────────────────────────────────────────────────────
+    function setViewMode(on) {
+      viewMode = on;
+      document.getElementById('edit-tools').classList.toggle('hidden', on);
+      document.getElementById('controls').classList.toggle('hidden', on);
+      if (on) selectedEl = null;
+    }
+
+    // ── Dialog "você clicou" ───────────────────────────────────────────────────
+    function openClickDialog() {
+      document.getElementById('click-dialog').classList.add('open');
+    }
+
+    document.getElementById('click-dialog-close').addEventListener('click', () =>
+      document.getElementById('click-dialog').classList.remove('open')
+    );
+
+    document.getElementById('click-dialog').addEventListener('click', e => {
+      if (e.target === document.getElementById('click-dialog'))
+        document.getElementById('click-dialog').classList.remove('open');
+    });
 
     // ── Init: carrega cena da API ──────────────────────────────────────────────
     (async function init() {
@@ -187,6 +264,8 @@
       const scene = await res.json();
       document.title = scene.name;
       document.getElementById('scene-name').textContent = scene.name;
+
+      if (params.get('mode') === 'view') setViewMode(true);
 
       const aScene = document.querySelector('a-scene');
       const onReady = () => {
@@ -282,7 +361,10 @@
         this._up   = this._up.bind(this);
         this.el.addEventListener('mousedown', this._down);
         this.el.addEventListener('touchstart', this._down);
-        this.el.addEventListener('click', () => selectImage(this.el));
+        this.el.addEventListener('click', () => {
+          if (viewMode) openClickDialog();
+          else selectImage(this.el);
+        });
       },
 
       _faceCamera() {
@@ -296,6 +378,7 @@
       },
 
       _down() {
+        if (viewMode) return;
         this.active = true;
         selectImage(this.el);
         document.querySelector('#cam').components['look-controls'].pause();
