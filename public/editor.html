@@ -427,7 +427,7 @@
       forward.applyQuaternion(cam3D.getWorldQuaternion(new THREE.Quaternion()));
       forward.normalize();
       const dialogEl = document.querySelector('#hud-dialog');
-      dialogEl.object3D.position.copy(camPos.clone().add(forward.multiplyScalar(3)));
+      dialogEl.object3D.position.copy(camPos.clone().add(forward.multiplyScalar(1.5)));
       dialogEl.object3D.lookAt(camPos);
     }
 
