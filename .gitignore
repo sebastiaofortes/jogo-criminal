@@ -1,4 +1,5 @@
 node_modules/
+package-lock.json
 scenes.json
 .DS_Store
 public/objects/*
@@ -7,3 +8,4 @@ public/music/*
 !public/music/.gitkeep
 public/sounds/*
 !public/sounds/.gitkeep
+.vercel
