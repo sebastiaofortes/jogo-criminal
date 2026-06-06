@@ -461,8 +461,7 @@
       ).filter(el => el.dataset.objRequired === 'true');
       if (requiredEls.length === 0) return;
       if (requiredEls.every(el => clickedRequiredIds.has(el.dataset.objId))) {
-        stopMusic();
-        window.location.href = `/editor.html?id=${nextSceneId}&mode=view`;
+        loadScene(nextSceneId);
       }
     }
 
@@ -479,6 +478,47 @@
       if (!bgAudio) return;
       bgAudio.pause();
       bgAudio = null;
+    }
+
+    async function loadScene(id) {
+      stopMusic();
+      clickSoundBuffer = null;
+
+      sceneId            = id;
+      selectedEl         = null;
+      selectedBtnEl      = null;
+      imageCount         = 0;
+      btnCount           = 0;
+      pendingDisappearEl = null;
+      lastClickedEl      = null;
+      nextSceneId        = null;
+      clickedRequiredIds = new Set();
+
+      document.querySelectorAll('a-image[drag-move]').forEach(el => el.remove());
+      document.querySelectorAll('a-plane[button-move]').forEach(el => el.remove());
+      document.querySelectorAll('#assets img').forEach(el => el.remove());
+      document.querySelector('#hud-dialog').setAttribute('visible', false);
+      document.getElementById('controls').style.display = 'none';
+      document.getElementById('button-controls').style.display = 'none';
+
+      const res = await fetch(`/api/scenes/${id}`);
+      if (!res.ok) return window.location.href = '/';
+      const scene = await res.json();
+
+      sceneId     = scene.id;
+      nextSceneId = scene.nextSceneId || null;
+      document.title = scene.name;
+      document.getElementById('scene-name').textContent = scene.name;
+
+      setViewMode(true);
+      startMusic(scene.music || null);
+      loadClickSound(scene.clickSound || null);
+
+      applyBackground(scene.background);
+      if (scene.objects?.length) loadObjects(scene.objects);
+      if (scene.buttons?.length) loadButtons(scene.buttons);
+
+      history.pushState({}, '', `/editor.html?id=${id}&mode=view`);
     }
 
     function updateMusicUI(musicPath) {
@@ -598,38 +638,30 @@
     // ── Carregar objetos salvos ────────────────────────────────────────────────
     function loadObjects(objects) {
       objects.forEach(obj => {
-        const id    = 'obj-' + (++imageCount);
-        const asset = document.createElement('img');
-        asset.id    = id;
-        asset.src   = obj.src;
-        document.getElementById('assets').appendChild(asset);
+        const el = document.createElement('a-image');
+        el.setAttribute('src',      obj.src);
+        el.setAttribute('width',    obj.width);
+        el.setAttribute('height',   obj.height);
+        el.setAttribute('position', `${obj.position.x} ${obj.position.y} ${obj.position.z}`);
+        el.setAttribute('scale',    `${obj.scale} ${obj.scale} ${obj.scale}`);
+        el.setAttribute('material', 'transparent: true; alphaTest: 0.05');
+        el.setAttribute('drag-move', '');
+        el.dataset.objId          = obj.id;
+        el.dataset.objSrc         = obj.src;
+        el.dataset.objDescription = obj.description    || '';
+        el.dataset.objDisappear   = obj.disappearOnClick ? 'true' : 'false';
+        el.dataset.objRequired    = obj.isRequired       ? 'true' : 'false';
+        el.userData = { imgNum: ++imageCount, rotZ: obj.rotZ || 0 };
+        document.querySelector('a-scene').appendChild(el);
 
-        asset.onload = () => {
-          const el = document.createElement('a-image');
-          el.setAttribute('src',      '#' + id);
-          el.setAttribute('width',    obj.width);
-          el.setAttribute('height',   obj.height);
-          el.setAttribute('position', `${obj.position.x} ${obj.position.y} ${obj.position.z}`);
-          el.setAttribute('scale',    `${obj.scale} ${obj.scale} ${obj.scale}`);
-          el.setAttribute('material', 'transparent: true; alphaTest: 0.05');
-          el.setAttribute('drag-move', '');
-          el.dataset.objId          = obj.id;
-          el.dataset.objSrc         = obj.src;
-          el.dataset.objDescription = obj.description    || '';
-          el.dataset.objDisappear   = obj.disappearOnClick ? 'true' : 'false';
-          el.dataset.objRequired    = obj.isRequired       ? 'true' : 'false';
-          el.userData = { imgNum: imageCount, rotZ: obj.rotZ || 0 };
-          document.querySelector('a-scene').appendChild(el);
-
-          el.addEventListener('loaded', () => {
-            const cam3D = document.querySelector('#cam').getObject3D('camera');
-            const camPos = new THREE.Vector3();
-            cam3D.getWorldPosition(camPos);
-            el.object3D.lookAt(camPos);
-            const r = el.object3D.rotation;
-            el.object3D.rotation.set(r.x, r.y, r.z + (obj.rotZ || 0));
-          });
-        };
+        el.addEventListener('loaded', () => {
+          const cam3D = document.querySelector('#cam').getObject3D('camera');
+          const camPos = new THREE.Vector3();
+          cam3D.getWorldPosition(camPos);
+          el.object3D.lookAt(camPos);
+          const r = el.object3D.rotation;
+          el.object3D.rotation.set(r.x, r.y, r.z + (obj.rotZ || 0));
+        });
       });
     }
 
@@ -749,7 +781,7 @@
         this.el.addEventListener('click', () => {
           if (viewMode) {
             const target = this.el.dataset.btnTargetSceneId;
-            if (target) { stopMusic(); window.location.href = `/editor.html?id=${target}&mode=view`; }
+            if (target) loadScene(target);
           } else {
             selectButton(this.el);
           }
@@ -808,7 +840,14 @@
       remove() {
         this.el.removeEventListener('mousedown', this._down);
         this.el.removeEventListener('touchstart', this._down);
-        this._up();
+        if (this.active) {
+          this.active = false;
+          document.querySelector('#cam').components['look-controls'].play();
+          window.removeEventListener('mousemove', this._move);
+          window.removeEventListener('touchmove', this._move);
+          window.removeEventListener('mouseup',   this._up);
+          window.removeEventListener('touchend',  this._up);
+        }
       }
     });
 
@@ -888,7 +927,14 @@
       remove() {
         this.el.removeEventListener('mousedown', this._down);
         this.el.removeEventListener('touchstart', this._down);
-        this._up();
+        if (this.active) {
+          this.active = false;
+          document.querySelector('#cam').components['look-controls'].play();
+          window.removeEventListener('mousemove', this._move);
+          window.removeEventListener('touchmove', this._move);
+          window.removeEventListener('mouseup',   this._up);
+          window.removeEventListener('touchend',  this._up);
+        }
       }
     });
 
