@@ -1,0 +1,21 @@
+.gitignore
+  s_aa9b5c32d6d1c1::t_b8d67b56b3ea4f 2
+.npmrc
+  s_aa9b5c32d6d1c1::t_3f207568aba563 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "35767f07d27914bbdb265f4c67d484b62fc9e9bf",
+  "prompts": {},
+  "sessions": {
+    "s_aa9b5c32d6d1c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "712f26fa-9106-495a-ba19-c8d909cc4933",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "fury install <sebastiao.fortes@mercadolivre.com>"
+    }
+  }
+}
