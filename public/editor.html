@@ -123,49 +123,6 @@
 
     .btn-remove:hover { background: rgba(239,68,68,0.28); }
 
-    /* Dialog de clique no modo visualização */
-    #click-dialog {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 10000;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(3px);
-    }
-
-    #click-dialog.open { display: flex; }
-
-    #click-dialog-box {
-      background: #1a1a1a;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 14px;
-      padding: 28px 32px;
-      text-align: center;
-      color: white;
-      font-family: sans-serif;
-      min-width: 220px;
-    }
-
-    #click-dialog-box p {
-      font-size: 16px;
-      margin-bottom: 20px;
-      color: rgba(255,255,255,0.85);
-    }
-
-    #click-dialog-close {
-      background: rgba(255,255,255,0.08);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px;
-      padding: 8px 24px;
-      cursor: pointer;
-      font-size: 13px;
-      transition: background 0.15s;
-    }
-
-    #click-dialog-close:hover { background: rgba(255,255,255,0.15); }
 
     #controls textarea {
       width: 100%;
@@ -401,19 +358,30 @@
     </div>
   </div>
 
-  <!-- Dialog modo visualização -->
-  <div id="click-dialog">
-    <div id="click-dialog-box">
-      <p id="click-dialog-text"></p>
-      <button id="click-dialog-close">Fechar</button>
-    </div>
-  </div>
-
   <a-scene>
     <a-assets id="assets"></a-assets>
     <a-sky id="sky" rotation="0 -130 0"></a-sky>
+
+    <!-- Dialog no espaço da cena — posicionado via JS ao abrir -->
+    <a-entity id="hud-dialog" visible="false">
+      <a-plane width="1.4" height="0.8" color="#1a1a1a" opacity="0.92"
+               material="side: double"></a-plane>
+      <a-text id="hud-dialog-text" value=""
+              align="center" color="#dddddd"
+              width="1.2" wrap-count="30"
+              position="0 0.15 0.01"></a-text>
+      <a-plane id="hud-close-btn" class="dialog-btn"
+               width="0.4" height="0.12" color="#333333" opacity="0.9"
+               position="0 -0.25 0.01" material="side: double">
+        <a-text value="Fechar" align="center" color="#ffffff"
+                width="0.35" position="0 0 0.01"></a-text>
+      </a-plane>
+    </a-entity>
+
     <a-camera id="cam" look-controls="pointerLockEnabled: false">
-      <a-cursor id="cursor" cursor="rayOrigin: mouse" raycaster="objects: .draggable; far: 20" color="#ffffff" opacity="0"></a-cursor>
+      <a-cursor id="cursor" cursor="rayOrigin: mouse"
+                raycaster="objects: .draggable, .dialog-btn; far: 20"
+                color="#ffffff" opacity="0"></a-cursor>
     </a-camera>
   </a-scene>
 
@@ -451,18 +419,30 @@
     }
 
     // ── Dialog "você clicou" ───────────────────────────────────────────────────
+    function positionDialog() {
+      const cam3D = document.querySelector('#cam').getObject3D('camera');
+      const camPos = new THREE.Vector3();
+      cam3D.getWorldPosition(camPos);
+      const forward = new THREE.Vector3(0, 0, -1);
+      forward.applyQuaternion(cam3D.getWorldQuaternion(new THREE.Quaternion()));
+      forward.normalize();
+      const dialogEl = document.querySelector('#hud-dialog');
+      dialogEl.object3D.position.copy(camPos.clone().add(forward.multiplyScalar(3)));
+      dialogEl.object3D.lookAt(camPos);
+    }
+
     function openClickDialog(el) {
       playClickSound();
       const desc = (el.dataset.objDescription || '').trim();
-      document.getElementById('click-dialog-text').textContent =
-        desc || 'Sem descrição.';
+      document.querySelector('#hud-dialog-text').setAttribute('value', desc || 'Sem descrição.');
       pendingDisappearEl = el.dataset.objDisappear === 'true' ? el : null;
       lastClickedEl = el;
-      document.getElementById('click-dialog').classList.add('open');
+      positionDialog();
+      document.querySelector('#hud-dialog').setAttribute('visible', true);
     }
 
     function closeClickDialog() {
-      document.getElementById('click-dialog').classList.remove('open');
+      document.querySelector('#hud-dialog').setAttribute('visible', false);
       if (pendingDisappearEl) {
         pendingDisappearEl.object3D.visible = false;
         pendingDisappearEl = null;
@@ -536,13 +516,8 @@
       document.getElementById('clicksound-remove-btn').classList.toggle('hidden', !soundPath);
     }
 
-    document.getElementById('click-dialog-close').addEventListener('click',
-      closeClickDialog
-    );
-
-    document.getElementById('click-dialog').addEventListener('click', e => {
-      if (e.target === document.getElementById('click-dialog'))
-        closeClickDialog();
+    document.querySelector('a-scene').addEventListener('loaded', () => {
+      document.querySelector('#hud-close-btn').addEventListener('click', closeClickDialog);
     });
 
     // ── Init: carrega cena da API ──────────────────────────────────────────────
