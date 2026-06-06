@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Editor de Cena</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-troika-text/dist/aframe-troika-text.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
 
@@ -366,15 +367,14 @@
     <a-entity id="hud-dialog" visible="false">
       <a-plane width="1.4" height="0.8" color="#1a1a1a" opacity="0.92"
                material="side: double"></a-plane>
-      <a-text id="hud-dialog-text" value=""
-              align="center" color="#dddddd"
-              width="1.2" wrap-count="30"
-              position="0 0.15 0.01"></a-text>
+      <a-entity id="hud-dialog-text"
+                troika-text="value: ; color: #dddddd; fontSize: 0.07; maxWidth: 1.2; textAlign: center; anchorX: center; anchorY: middle"
+                position="0 0.15 0.01"></a-entity>
       <a-plane id="hud-close-btn" class="dialog-btn"
                width="0.4" height="0.12" color="#333333" opacity="0.9"
                position="0 -0.25 0.01" material="side: double">
-        <a-text value="Fechar" align="center" color="#ffffff"
-                width="0.35" position="0 0 0.01"></a-text>
+        <a-entity troika-text="value: Fechar; color: #ffffff; fontSize: 0.055; anchorX: center; anchorY: middle"
+                  position="0 0 0.01"></a-entity>
       </a-plane>
     </a-entity>
 
@@ -434,7 +434,7 @@
     function openClickDialog(el) {
       playClickSound();
       const desc = (el.dataset.objDescription || '').trim();
-      document.querySelector('#hud-dialog-text').setAttribute('value', desc || 'Sem descrição.');
+      document.querySelector('#hud-dialog-text').setAttribute('troika-text', 'value', desc || 'Sem descrição.');
       pendingDisappearEl = el.dataset.objDisappear === 'true' ? el : null;
       lastClickedEl = el;
       positionDialog();
@@ -701,11 +701,8 @@
       plane.setAttribute('scale',    `${scale} ${scale} ${scale}`);
       plane.setAttribute('button-move', '');
 
-      const text = document.createElement('a-text');
-      text.setAttribute('value',    label || '');
-      text.setAttribute('align',    'center');
-      text.setAttribute('color',    '#ffffff');
-      text.setAttribute('width',    '1.8');
+      const text = document.createElement('a-entity');
+      text.setAttribute('troika-text', `value: ${label || ''}; color: #ffffff; fontSize: 0.07; maxWidth: 1.8; textAlign: center; anchorX: center; anchorY: middle`);
       text.setAttribute('position', '0 0 0.01');
       plane.appendChild(text);
 
@@ -1027,7 +1024,7 @@
     document.getElementById('btn-label-input').addEventListener('input', function () {
       if (!selectedBtnEl) return;
       selectedBtnEl.dataset.btnLabel = this.value;
-      selectedBtnEl.querySelector('a-text').setAttribute('value', this.value);
+      selectedBtnEl.querySelector('[troika-text]').setAttribute('troika-text', 'value', this.value);
     });
 
     document.getElementById('btn-label-input').addEventListener('blur', () => saveButtons());
