@@ -1,0 +1,24 @@
+public/editor.html
+  s_32fb2868956c5b::t_8df0f7f63a2a55 641-664
+  s_32fb2868956c5b::t_8087c3321393c8 843-850
+  s_32fb2868956c5b::t_23c051d0b2f0d1 784
+  s_32fb2868956c5b::t_b9cd13b62f3d15 464
+  s_32fb2868956c5b::t_23be25f2ce9810 930-937
+  s_32fb2868956c5b::t_62ec98c440def9 483-523
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ea7c13d31074ceed2d1bd0ca03feefc6320b4971",
+  "prompts": {},
+  "sessions": {
+    "s_32fb2868956c5b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d013d641-3048-4380-b3ff-fa0359063d1e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "fury install <sebastiao.fortes@mercadolivre.com>"
+    }
+  }
+}
