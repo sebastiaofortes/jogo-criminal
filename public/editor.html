@@ -214,7 +214,8 @@
 
     .btn-music-remove:hover { background: rgba(239,68,68,0.22); }
 
-    #button-controls {
+    #button-controls,
+    #text-panel-controls {
       display: none;
       background: rgba(15,15,15,0.82);
       border: 1px solid rgba(255,255,255,0.13);
@@ -259,8 +260,9 @@
       <button class="btn" id="bg-btn">&#x1F5BC; Fundo</button>
     </div>
 
-    <div id="nav-tools">
-      <button class="btn" id="add-nav-btn" style="width:100%">+ Botão de Navegação</button>
+    <div id="nav-tools" class="btn-group">
+      <button class="btn" id="add-nav-btn">+ Navegação</button>
+      <button class="btn" id="add-text-panel-btn">+ Texto</button>
     </div>
 
     <input id="music-input"      type="file" accept="audio/*" style="display:none">
@@ -357,6 +359,28 @@
         <button class="btn-remove" id="btn-remove-btn">Remover botão</button>
       </div>
     </div>
+
+    <div id="text-panel-controls">
+      <div class="panel-title">Painel de texto</div>
+
+      <div class="control-row">
+        <div class="control-label">Conteúdo</div>
+        <textarea id="panel-content-input"
+                  placeholder="Escreva o texto do painel..."
+                  rows="5"></textarea>
+      </div>
+
+      <div class="control-row">
+        <div class="control-label">
+          Tamanho <span id="panel-scale-val">1.0×</span>
+        </div>
+        <input type="range" id="panel-scale-slider" min="0.2" max="3" step="0.05" value="1">
+      </div>
+
+      <div class="control-row">
+        <button class="btn-remove" id="panel-remove-btn">Remover painel</button>
+      </div>
+    </div>
   </div>
 
   <a-scene>
@@ -400,6 +424,8 @@
     let clickSoundBuffer   = null;
     let selectedBtnEl      = null;
     let btnCount           = 0;
+    let selectedPanelEl    = null;
+    let panelCount         = 0;
 
     // ── Modo visualização ──────────────────────────────────────────────────────
     function setViewMode(on) {
@@ -409,7 +435,8 @@
       document.getElementById('scene-settings').classList.toggle('hidden', on);
       document.getElementById('controls').classList.toggle('hidden', on);
       document.getElementById('button-controls').classList.toggle('hidden', on);
-      if (on) { selectedEl = null; selectedBtnEl = null; }
+      document.getElementById('text-panel-controls').classList.toggle('hidden', on);
+      if (on) { selectedEl = null; selectedBtnEl = null; selectedPanelEl = null; }
 
       // Modo edição: raycaster segue o mouse (clique direto nos objetos)
       // Modo visualização: raycaster no centro da tela (mira com a câmera)
@@ -487,8 +514,10 @@
       sceneId            = id;
       selectedEl         = null;
       selectedBtnEl      = null;
+      selectedPanelEl    = null;
       imageCount         = 0;
       btnCount           = 0;
+      panelCount         = 0;
       pendingDisappearEl = null;
       lastClickedEl      = null;
       nextSceneId        = null;
@@ -496,6 +525,7 @@
 
       document.querySelectorAll('a-image[drag-move]').forEach(el => el.remove());
       document.querySelectorAll('a-plane[button-move]').forEach(el => el.remove());
+      document.querySelectorAll('a-plane[text-panel-move]').forEach(el => el.remove());
       document.querySelectorAll('#assets img').forEach(el => el.remove());
       document.querySelector('#hud-dialog').setAttribute('visible', false);
       document.getElementById('controls').style.display = 'none';
@@ -517,6 +547,12 @@
       applyBackground(scene.background);
       if (scene.objects?.length) loadObjects(scene.objects);
       if (scene.buttons?.length) loadButtons(scene.buttons);
+
+      // Aguarda um ciclo de renderização antes de adicionar painéis de texto,
+      // pois o THREE.js precisa processar as remoções anteriores primeiro.
+      if (scene.textPanels?.length) {
+        requestAnimationFrame(() => loadTextPanels(scene.textPanels));
+      }
 
       history.pushState({}, '', `/editor.html?id=${id}&mode=view`);
     }
@@ -614,8 +650,9 @@
       const aScene = document.querySelector('a-scene');
       const onReady = () => {
         applyBackground(scene.background);
-        if (scene.objects && scene.objects.length > 0) loadObjects(scene.objects);
-        if (scene.buttons && scene.buttons.length > 0) loadButtons(scene.buttons);
+        if (scene.objects?.length)     loadObjects(scene.objects);
+        if (scene.buttons?.length)     loadButtons(scene.buttons);
+        if (scene.textPanels?.length)  loadTextPanels(scene.textPanels);
       };
       aScene.hasLoaded ? onReady() : aScene.addEventListener('loaded', onReady);
     })();
@@ -763,6 +800,83 @@
       document.getElementById('btn-scale-val').textContent = s.toFixed(1) + '×';
     }
 
+    // ── Painéis de texto ──────────────────────────────────────────────────────
+    function createTextPanelEl(id, content, position, scale, rotZ) {
+      const plane = document.createElement('a-plane');
+      plane.setAttribute('width',    '2');
+      plane.setAttribute('height',   '1.2');
+      plane.setAttribute('color',    '#1a1a1a');
+      plane.setAttribute('opacity',  '0.92');
+      plane.setAttribute('material', 'color: #1a1a1a; opacity: 0.92; side: double');
+      plane.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+      plane.setAttribute('scale',    `${scale} ${scale} ${scale}`);
+      plane.setAttribute('text-panel-move', '');
+
+      const text = document.createElement('a-entity');
+      text.setAttribute('troika-text', {
+        value:     content || '',
+        color:     '#eeeeee',
+        fontSize:  0.065,
+        maxWidth:  1.8,
+        textAlign: 'left',
+        anchorX:   'center',
+        anchorY:   'middle'
+      });
+      text.setAttribute('position', '0 0 0.01');
+      plane.appendChild(text);
+
+      plane.dataset.panelId      = id;
+      plane.dataset.panelContent = content || '';
+      plane.userData = { rotZ: rotZ || 0, panelNum: ++panelCount };
+      return plane;
+    }
+
+    async function saveTextPanels() {
+      const els = document.querySelectorAll('a-plane[text-panel-move]');
+      const textPanels = Array.from(els).map(el => {
+        const p = el.object3D.position;
+        return {
+          id:       el.dataset.panelId,
+          content:  el.dataset.panelContent,
+          position: { x: p.x, y: p.y, z: p.z },
+          scale:    el.object3D.scale.x,
+          rotZ:     el.userData.rotZ || 0
+        };
+      });
+      await fetch(`/api/scenes/${sceneId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ textPanels })
+      });
+    }
+
+    function loadTextPanels(textPanels) {
+      textPanels.forEach(p => {
+        const el = createTextPanelEl(p.id, p.content, p.position, p.scale, p.rotZ);
+        document.querySelector('a-scene').appendChild(el);
+        el.addEventListener('loaded', () => {
+          const cam3D = document.querySelector('#cam').getObject3D('camera');
+          const camPos = new THREE.Vector3();
+          cam3D.getWorldPosition(camPos);
+          el.object3D.lookAt(camPos);
+          const r = el.object3D.rotation;
+          el.object3D.rotation.set(r.x, r.y, r.z + (p.rotZ || 0));
+        });
+      });
+    }
+
+    function selectTextPanel(el) {
+      selectedPanelEl = el;
+      selectedEl = selectedBtnEl = null;
+      document.getElementById('controls').style.display        = 'none';
+      document.getElementById('button-controls').style.display = 'none';
+      document.getElementById('text-panel-controls').style.display = 'block';
+      document.getElementById('panel-content-input').value = el.dataset.panelContent || '';
+      const s = el.object3D.scale.x;
+      document.getElementById('panel-scale-slider').value = s;
+      document.getElementById('panel-scale-val').textContent = s.toFixed(1) + '×';
+    }
+
     // ── Button-move component ──────────────────────────────────────────────────
     AFRAME.registerComponent('button-move', {
       schema: { distance: { type: 'number', default: 4 } },
@@ -832,6 +946,86 @@
         window.removeEventListener('mouseup',   this._up);
         window.removeEventListener('touchend',  this._up);
         saveButtons();
+      },
+
+      remove() {
+        this.el.removeEventListener('mousedown', this._down);
+        this.el.removeEventListener('touchstart', this._down);
+        if (this.active) {
+          this.active = false;
+          document.querySelector('#cam').components['look-controls'].play();
+          window.removeEventListener('mousemove', this._move);
+          window.removeEventListener('touchmove', this._move);
+          window.removeEventListener('mouseup',   this._up);
+          window.removeEventListener('touchend',  this._up);
+        }
+      }
+    });
+
+    // ── Text-panel-move component ─────────────────────────────────────────────
+    AFRAME.registerComponent('text-panel-move', {
+      schema: { distance: { type: 'number', default: 4 } },
+
+      init() {
+        this.el.classList.add('draggable');
+        this.active = false;
+        this._down = this._down.bind(this);
+        this._move = this._move.bind(this);
+        this._up   = this._up.bind(this);
+        this.el.addEventListener('mousedown', this._down);
+        this.el.addEventListener('touchstart', this._down);
+        this.el.addEventListener('click', () => {
+          if (!viewMode) selectTextPanel(this.el);
+        });
+      },
+
+      _faceCamera() {
+        const cam3D = document.querySelector('#cam').getObject3D('camera');
+        const camPos = new THREE.Vector3();
+        cam3D.getWorldPosition(camPos);
+        this.el.object3D.lookAt(camPos);
+        const rz = this.el.userData.rotZ || 0;
+        const r  = this.el.object3D.rotation;
+        this.el.object3D.rotation.set(r.x, r.y, r.z + rz);
+      },
+
+      _down() {
+        if (viewMode) return;
+        this.active = true;
+        selectTextPanel(this.el);
+        document.querySelector('#cam').components['look-controls'].pause();
+        window.addEventListener('mousemove', this._move);
+        window.addEventListener('touchmove', this._move, { passive: false });
+        window.addEventListener('mouseup',  this._up);
+        window.addEventListener('touchend', this._up);
+      },
+
+      _move(e) {
+        if (!this.active) return;
+        e.preventDefault && e.preventDefault();
+        const canvas = this.el.sceneEl.canvas;
+        const { left, top, width, height } = canvas.getBoundingClientRect();
+        const cam3D = document.querySelector('#cam').getObject3D('camera');
+        const cx = e.touches ? e.touches[0].clientX : e.clientX;
+        const cy = e.touches ? e.touches[0].clientY : e.clientY;
+        const nx = ((cx - left) / width)  *  2 - 1;
+        const ny = -((cy - top) / height) *  2 + 1;
+        const rc = new THREE.Raycaster();
+        rc.setFromCamera({ x: nx, y: ny }, cam3D);
+        const pos = rc.ray.origin.clone()
+          .add(rc.ray.direction.clone().normalize().multiplyScalar(this.data.distance));
+        this.el.object3D.position.copy(pos);
+        this._faceCamera();
+      },
+
+      _up() {
+        this.active = false;
+        document.querySelector('#cam').components['look-controls'].play();
+        window.removeEventListener('mousemove', this._move);
+        window.removeEventListener('touchmove', this._move);
+        window.removeEventListener('mouseup',   this._up);
+        window.removeEventListener('touchend',  this._up);
+        saveTextPanels();
       },
 
       remove() {
@@ -1027,7 +1221,8 @@
       selectedBtnEl.querySelector('[troika-text]').setAttribute('troika-text', 'value', this.value);
     });
 
-    document.getElementById('btn-label-input').addEventListener('blur', () => saveButtons());
+    document.getElementById('btn-label-input').addEventListener('blur',
+      () => { if (selectedBtnEl) saveButtons(); });
 
     document.getElementById('btn-target-select').addEventListener('change', function () {
       if (!selectedBtnEl) return;
@@ -1050,6 +1245,44 @@
       selectedBtnEl = null;
       document.getElementById('button-controls').style.display = 'none';
       saveButtons();
+    });
+
+    // ── Listeners do painel de texto ──────────────────────────────────────────
+    document.getElementById('add-text-panel-btn').addEventListener('click', () => {
+      const el = createTextPanelEl(
+        crypto.randomUUID(), '', { x: 0, y: 1.6, z: -4 }, 1, 0
+      );
+      document.querySelector('a-scene').appendChild(el);
+      selectTextPanel(el);
+      saveTextPanels();
+    });
+
+    document.getElementById('panel-content-input').addEventListener('input', function () {
+      if (!selectedPanelEl) return;
+      selectedPanelEl.dataset.panelContent = this.value;
+      selectedPanelEl.querySelector('[troika-text]')
+        .setAttribute('troika-text', 'value', this.value);
+    });
+
+    document.getElementById('panel-content-input').addEventListener('blur',
+      () => { if (selectedPanelEl) saveTextPanels(); });
+
+    document.getElementById('panel-scale-slider').addEventListener('input', function () {
+      if (!selectedPanelEl) return;
+      const s = parseFloat(this.value);
+      selectedPanelEl.object3D.scale.set(s, s, s);
+      document.getElementById('panel-scale-val').textContent = s.toFixed(1) + '×';
+    });
+
+    document.getElementById('panel-scale-slider').addEventListener('change',
+      () => saveTextPanels());
+
+    document.getElementById('panel-remove-btn').addEventListener('click', () => {
+      if (!selectedPanelEl) return;
+      selectedPanelEl.parentNode.removeChild(selectedPanelEl);
+      selectedPanelEl = null;
+      document.getElementById('text-panel-controls').style.display = 'none';
+      saveTextPanels();
     });
 
     // ── Música de fundo ────────────────────────────────────────────────────────
