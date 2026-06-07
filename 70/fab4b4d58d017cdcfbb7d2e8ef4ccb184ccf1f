@@ -1,0 +1,36 @@
+server.js
+  s_32fb2868956c5b::t_be3c44d3c91b93 79-80
+public/editor.html
+  s_32fb2868956c5b::t_063d68f0c94949 1268
+  s_32fb2868956c5b::t_d4c0d3ad448b72 810
+  s_32fb2868956c5b::t_d9488b9eccd706 1224-1225
+  s_32fb2868956c5b::t_349ddffcb7e52e 517,520
+  s_32fb2868956c5b::t_c4dca8c3a82340 263-265
+  s_32fb2868956c5b::t_9d86122568fcba 217-218
+  s_32fb2868956c5b::t_35c8c4e6108e00 528
+  s_32fb2868956c5b::t_76f8ed3e7484ec 362-383
+  s_32fb2868956c5b::t_87531ccf47a82d 1250-1267,1269-1287
+  s_32fb2868956c5b::t_1b77d3bd3cf897 653-655
+  s_32fb2868956c5b::t_02c0eb93dc9996 965-1044
+  s_32fb2868956c5b::t_6f0cb2d73d77e6 803-809,811-853,855-879
+  s_32fb2868956c5b::t_b3e125dd6e60a5 438-439
+  s_32fb2868956c5b::t_0fb0dc62ae1ef6 854
+  s_32fb2868956c5b::t_064378c5d48ee0 551-556
+  s_32fb2868956c5b::t_e734b0156c35b7 427-428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "70fab4b4d58d017cdcfbb7d2e8ef4ccb184ccf1f",
+  "prompts": {},
+  "sessions": {
+    "s_32fb2868956c5b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d013d641-3048-4380-b3ff-fa0359063d1e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "fury install <sebastiao.fortes@mercadolivre.com>"
+    }
+  }
+}
