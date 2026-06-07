@@ -244,6 +244,113 @@
     #btn-target-select { padding: 6px 8px; cursor: pointer; }
 
     .hidden { display: none !important; }
+
+    #bg-picker-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 10001;
+      align-items: center;
+      justify-content: center;
+    }
+    #bg-picker-overlay.open { display: flex; }
+
+    #bg-picker {
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 20px;
+      width: 480px;
+      max-width: 95vw;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #bg-picker-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+    }
+
+    #bg-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      overflow-y: auto;
+      max-height: 50vh;
+    }
+
+    .bg-thumb {
+      aspect-ratio: 2/1;
+      object-fit: cover;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+
+    .bg-thumb:hover { border-color: rgba(255,255,255,0.5); }
+    .bg-thumb.active { border-color: #5b9cf6; }
+
+    .bg-item {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .bg-item-name {
+      font-size: 11px;
+      color: rgba(255,255,255,0.65);
+      text-align: center;
+      padding: 2px 4px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      outline: none;
+      background: transparent;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: text;
+    }
+
+    .bg-item-name:focus {
+      border-color: rgba(91,156,246,0.6);
+      background: rgba(255,255,255,0.06);
+    }
+
+    .bg-delete-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(239,68,68,0.85);
+      border: none;
+      border-radius: 4px;
+      color: white;
+      width: 18px;
+      height: 18px;
+      font-size: 10px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .bg-item:hover .bg-delete-btn { opacity: 1; }
+
+    #bg-picker-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
   </style>
 </head>
 <body>
@@ -383,6 +490,18 @@
     </div>
   </div>
 
+  <!-- Seletor de fundos -->
+  <div id="bg-picker-overlay">
+    <div id="bg-picker">
+      <div id="bg-picker-title">Selecionar fundo</div>
+      <div id="bg-picker-grid"></div>
+      <div id="bg-picker-actions">
+        <button class="btn" id="bg-picker-cancel">Cancelar</button>
+        <button class="btn" id="bg-picker-upload">+ Novo fundo</button>
+      </div>
+    </div>
+  </div>
+
   <a-scene>
     <a-assets id="assets"></a-assets>
     <a-sky id="sky" rotation="0 -130 0"></a-sky>
@@ -420,6 +539,7 @@
     let clickedRequiredIds = new Set();
     let lastClickedEl      = null;
     let bgAudio            = null;
+    let currentBgPath      = null;
     let audioCtx           = null;
     let clickSoundBuffer   = null;
     let selectedBtnEl      = null;
@@ -544,6 +664,7 @@
       startMusic(scene.music || null);
       loadClickSound(scene.clickSound || null);
 
+      currentBgPath = scene.background;
       applyBackground(scene.background);
       if (scene.objects?.length) loadObjects(scene.objects);
       if (scene.buttons?.length) loadButtons(scene.buttons);
@@ -646,6 +767,8 @@
           btnSel.appendChild(opt);
         });
       }
+
+      currentBgPath = scene.background;
 
       const aScene = document.querySelector('a-scene');
       const onReady = () => {
@@ -1398,13 +1521,96 @@
       this.value = '';
     });
 
+    // ── Seletor de fundos ──────────────────────────────────────────────────────
+    async function openBgPicker() {
+      const overlay = document.getElementById('bg-picker-overlay');
+      const grid    = document.getElementById('bg-picker-grid');
+      grid.innerHTML = '<span style="color:rgba(255,255,255,0.4);font-size:12px;padding:8px">Carregando...</span>';
+      overlay.classList.add('open');
+
+      const backgrounds = await fetch('/api/backgrounds').then(r => r.json());
+      grid.innerHTML = '';
+      backgrounds.forEach(bg => addBgItem(grid, bg));
+    }
+
+    function addBgItem(grid, bg) {
+      const item = document.createElement('div');
+      item.className = 'bg-item';
+
+      const img = document.createElement('img');
+      img.className = 'bg-thumb';
+      img.src = bg.path;
+      if (bg.path === currentBgPath) img.classList.add('active');
+      img.addEventListener('click', () => selectBackground(bg.path));
+
+      const nameEl = document.createElement('input');
+      nameEl.type = 'text';
+      nameEl.className = 'bg-item-name';
+      nameEl.value = bg.name;
+      nameEl.addEventListener('click', e => e.stopPropagation());
+      nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') nameEl.blur(); });
+      nameEl.addEventListener('blur', async () => {
+        const newName = nameEl.value.trim();
+        if (!newName || newName === bg.name) return;
+        await fetch(`/api/backgrounds/${bg.filename}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newName })
+        });
+        bg.name = newName;
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'bg-delete-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Deletar fundo';
+      delBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!confirm(`Deletar "${bg.name}"?`)) return;
+        await fetch(`/api/backgrounds/${bg.filename}`, { method: 'DELETE' });
+        item.remove();
+      });
+
+      item.appendChild(img);
+      item.appendChild(nameEl);
+      item.appendChild(delBtn);
+      grid.appendChild(item);
+    }
+
+    async function selectBackground(bgPath) {
+      document.getElementById('bg-picker-overlay').classList.remove('open');
+      applyBackground(bgPath);
+      currentBgPath = bgPath;
+      await fetch(`/api/scenes/${sceneId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ background: bgPath })
+      });
+    }
+
+    document.getElementById('bg-btn').onclick = openBgPicker;
+
+    document.getElementById('bg-picker-cancel').addEventListener('click', () =>
+      document.getElementById('bg-picker-overlay').classList.remove('open')
+    );
+
+    document.getElementById('bg-picker-overlay').addEventListener('click', e => {
+      if (e.target === document.getElementById('bg-picker-overlay'))
+        document.getElementById('bg-picker-overlay').classList.remove('open');
+    });
+
+    document.getElementById('bg-picker-upload').addEventListener('click', () =>
+      document.getElementById('bg-input').click()
+    );
+
     // ── Upload de fundo ────────────────────────────────────────────────────────
-    document.getElementById('bg-btn').onclick = () =>
-      document.getElementById('bg-input').click();
 
     document.getElementById('bg-input').addEventListener('change', async function (e) {
       const file = e.target.files[0];
       if (!file) return;
+
+      // Fecha o picker durante o upload
+      document.getElementById('bg-picker-overlay').classList.remove('open');
 
       const localUrl = URL.createObjectURL(file);
       const img = new Image();
@@ -1421,7 +1627,7 @@
 
       const form = new FormData();
       form.append('file', file);
-      const { path: bgPath } = await fetch('/api/upload/background', {
+      const { path: bgPath, name: bgName } = await fetch('/api/upload/background', {
         method: 'POST', body: form
       }).then(r => r.json());
 
@@ -1431,6 +1637,13 @@
         body:    JSON.stringify({ background: bgPath })
       });
 
+      currentBgPath = bgPath;
+      // Adiciona novo thumbnail ao grid se o picker for reaberto
+      const grid = document.getElementById('bg-picker-grid');
+      if (grid) {
+        const filename = bgPath.replace('fundos/', '');
+        addBgItem(grid, { filename, name: bgName || filename, path: bgPath });
+      }
       this.value = '';
     });
   </script>

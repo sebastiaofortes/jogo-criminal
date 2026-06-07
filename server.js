@@ -7,8 +7,18 @@ const crypto  = require('crypto');
 const app         = express();
 const PORT        = process.env.PORT || 3000;
 const SCENES_FILE = path.join(__dirname, 'scenes.json');
+const BG_META_FILE = path.join(__dirname, 'backgrounds.json');
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+function readBgMeta() {
+  if (!fs.existsSync(BG_META_FILE)) return {};
+  return JSON.parse(fs.readFileSync(BG_META_FILE, 'utf8'));
+}
+
+function writeBgMeta(data) {
+  fs.writeFileSync(BG_META_FILE, JSON.stringify(data, null, 2));
+}
+
 function readScenes() {
   if (!fs.existsSync(SCENES_FILE)) return { scenes: [] };
   return JSON.parse(fs.readFileSync(SCENES_FILE, 'utf8'));
@@ -29,10 +39,19 @@ const uploadMusic  = multer({ dest: path.join(__dirname, 'public/music/') });
 const uploadSounds = multer({ dest: path.join(__dirname, 'public/sounds/') });
 
 app.post('/api/upload/background', uploadBg.single('file'), (req, res) => {
-  const ext     = path.extname(req.file.originalname);
-  const newPath = req.file.path + ext;
+  const ext      = path.extname(req.file.originalname);
+  const newPath  = req.file.path + ext;
+  const filename = path.basename(newPath);
   fs.renameSync(req.file.path, newPath);
-  res.json({ path: 'fundos/' + path.basename(newPath) });
+
+  // Registra nome legível no meta (usa nome original do arquivo sem extensão)
+  const meta = readBgMeta();
+  if (!meta[filename]) {
+    meta[filename] = path.basename(req.file.originalname, ext);
+    writeBgMeta(meta);
+  }
+
+  res.json({ path: 'fundos/' + filename, name: meta[filename] });
 });
 
 app.post('/api/upload/object', uploadObj.single('file'), (req, res) => {
@@ -54,6 +73,38 @@ app.post('/api/upload/clicksound', uploadSounds.single('file'), (req, res) => {
   const newPath = req.file.path + ext;
   fs.renameSync(req.file.path, newPath);
   res.json({ path: 'sounds/' + path.basename(newPath) });
+});
+
+// ── Listagem, renomeação e deleção de fundos ───────────────────────────────
+app.get('/api/backgrounds', (req, res) => {
+  try {
+    const meta  = readBgMeta();
+    const dir   = path.join(__dirname, 'public/fundos/');
+    const files = fs.readdirSync(dir)
+      .filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f))
+      .map(f => ({ filename: f, name: meta[f] || f, path: `fundos/${f}` }));
+    res.json(files);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao ler diretório' });
+  }
+});
+
+app.put('/api/backgrounds/:filename', (req, res) => {
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Nome obrigatório' });
+  const meta = readBgMeta();
+  meta[req.params.filename] = name.trim();
+  writeBgMeta(meta);
+  res.json({ filename: req.params.filename, name: name.trim() });
+});
+
+app.delete('/api/backgrounds/:filename', (req, res) => {
+  const filePath = path.join(__dirname, 'public/fundos/', req.params.filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  const meta = readBgMeta();
+  delete meta[req.params.filename];
+  writeBgMeta(meta);
+  res.status(204).end();
 });
 
 // ── CRUD de cenas ──────────────────────────────────────────────────────────
