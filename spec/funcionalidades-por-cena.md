@@ -43,6 +43,14 @@ Efeito sonoro reproduzido ao clicar em qualquer objeto da cena.
 - Upload de arquivo de áudio curto
 - Único por cena
 
+### 9. Temporizador
+Countdown regressivo exibido como elemento 3D fixo no ambiente da cena.
+- Duração configurável em segundos no editor (0 ou vazio = sem timer)
+- Contador aparece como plano 3D (`⏱ 60`, `⏱ 59`…) posicionado no espaço
+- Ao chegar a zero: exibe dialog "Tempo esgotado" na frente da câmera
+- Após confirmar, avança automaticamente para a `Próxima cena` predefinida
+- Reinicia automaticamente ao navegar para uma nova cena
+
 ### 7. Próxima cena (progressão automática)
 Define para qual cena o jogador é redirecionado ao coletar todos os objetos marcados como `Necessário para avançar`.
 

@@ -245,6 +245,20 @@
 
     #btn-target-select { padding: 6px 8px; cursor: pointer; }
 
+    #timer-input {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.85);
+      font-size: 12px;
+      padding: 6px 8px;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    #timer-input:focus { border-color: rgba(91,156,246,0.5); }
+
     .hidden { display: none !important; }
 
     #bg-picker-overlay {
@@ -400,6 +414,12 @@
         <button class="btn-music" id="clicksound-btn">+ Áudio</button>
         <button class="btn-music btn-music-remove hidden" id="clicksound-remove-btn">✕</button>
       </div>
+
+      <hr class="settings-divider">
+
+      <div class="settings-label">Temporizador (segundos)</div>
+      <input type="number" id="timer-input" min="0" max="3600"
+             placeholder="0 = sem timer">
     </div>
 
     <div id="controls">
@@ -543,6 +563,20 @@
       </a-plane>
     </a-entity>
 
+    <!-- Dialog de tempo esgotado -->
+    <a-entity id="timeout-dialog" visible="false">
+      <a-plane width="1.6" height="0.7" color="#1a1a1a" opacity="0.95"
+               material="side: double"></a-plane>
+      <a-entity troika-text="value: Tempo esgotado; color: #ff6b6b; fontSize: 0.1; textAlign: center; anchorX: center; anchorY: middle"
+                position="0 0.1 0.01"></a-entity>
+      <a-plane id="timeout-continue-btn" class="dialog-btn"
+               width="0.5" height="0.13" color="#333333" opacity="0.9"
+               position="0 -0.22 0.01" material="side: double">
+        <a-entity troika-text="value: Continuar; color: #ffffff; fontSize: 0.055; anchorX: center; anchorY: middle"
+                  position="0 0 0.01"></a-entity>
+      </a-plane>
+    </a-entity>
+
     <a-camera id="cam" look-controls="pointerLockEnabled: false">
       <a-cursor id="cursor" cursor="rayOrigin: mouse"
                 raycaster="objects: .draggable, .dialog-btn; far: 20"
@@ -570,6 +604,8 @@
     let panelCount         = 0;
     let selectedLabelEl    = null;
     let labelCount         = 0;
+    let timerInterval      = null;
+    let timerEl            = null;
 
     // ── Modo visualização ──────────────────────────────────────────────────────
     function setViewMode(on) {
@@ -582,6 +618,7 @@
       document.getElementById('text-panel-controls').classList.toggle('hidden', on);
       document.getElementById('label-controls').classList.toggle('hidden', on);
       if (on) { selectedEl = null; selectedBtnEl = null; selectedPanelEl = null; selectedLabelEl = null; }
+      if (!on) stopTimer();
 
       // Modo edição: raycaster segue o mouse (clique direto nos objetos)
       // Modo visualização: raycaster no centro da tela (mira com a câmera)
@@ -654,6 +691,7 @@
 
     async function loadScene(id) {
       stopMusic();
+      stopTimer();
       clickSoundBuffer = null;
 
       sceneId            = id;
@@ -676,6 +714,7 @@
       document.querySelectorAll('a-plane[label-move]').forEach(el => el.remove());
       document.querySelectorAll('#assets img').forEach(el => el.remove());
       document.querySelector('#hud-dialog').setAttribute('visible', false);
+      document.querySelector('#timeout-dialog').setAttribute('visible', false);
       document.getElementById('controls').style.display = 'none';
       document.getElementById('button-controls').style.display = 'none';
       document.getElementById('label-controls').style.display = 'none';
@@ -706,6 +745,7 @@
       if (scene.labels?.length) {
         requestAnimationFrame(() => loadLabels(scene.labels));
       }
+      startTimer(scene.timerSeconds || null);
 
       history.pushState({}, '', `/editor.html?id=${id}&mode=view`);
     }
@@ -747,6 +787,10 @@
 
     document.querySelector('a-scene').addEventListener('loaded', () => {
       document.querySelector('#hud-close-btn').addEventListener('click', closeClickDialog);
+      document.querySelector('#timeout-continue-btn').addEventListener('click', () => {
+        document.querySelector('#timeout-dialog').setAttribute('visible', false);
+        if (nextSceneId) loadScene(nextSceneId);
+      });
     });
 
     // ── Init: carrega cena da API ──────────────────────────────────────────────
@@ -767,9 +811,11 @@
         setViewMode(true);
         startMusic(scene.music || null);
         loadClickSound(scene.clickSound || null);
+        startTimer(scene.timerSeconds || null);
       } else {
         updateMusicUI(scene.music || null);
         updateClickSoundUI(scene.clickSound || null);
+        document.getElementById('timer-input').value = scene.timerSeconds || '';
         const allScenes = await fetch('/api/scenes').then(r => r.json());
         const sel = document.getElementById('next-scene-select');
         allScenes
@@ -1110,6 +1156,75 @@
       const s = el.object3D.scale.x;
       document.getElementById('label-scale-slider').value = s;
       document.getElementById('label-scale-val').textContent = s.toFixed(1) + '×';
+    }
+
+    // ── Temporizador 3D ───────────────────────────────────────────────────────
+    function createTimerEl(seconds) {
+      const plane = document.createElement('a-plane');
+      plane.setAttribute('width',    '0.9');
+      plane.setAttribute('height',   '0.4');
+      plane.setAttribute('color',    '#111111');
+      plane.setAttribute('opacity',  '0.85');
+      plane.setAttribute('material', 'color: #111111; opacity: 0.85; side: double');
+      plane.setAttribute('position', '0 2.8 -4');
+
+      const textEl = document.createElement('a-entity');
+      textEl.setAttribute('troika-text', {
+        value:     '⏱ ' + seconds,
+        color:     '#ffffff',
+        fontSize:  0.12,
+        textAlign: 'center',
+        anchorX:   'center',
+        anchorY:   'middle'
+      });
+      textEl.setAttribute('position', '0 0 0.01');
+      plane.appendChild(textEl);
+
+      plane.addEventListener('loaded', () => {
+        const cam3D = document.querySelector('#cam').getObject3D('camera');
+        const camPos = new THREE.Vector3();
+        cam3D.getWorldPosition(camPos);
+        plane.object3D.lookAt(camPos);
+      });
+
+      return plane;
+    }
+
+    function startTimer(seconds) {
+      if (!seconds || seconds <= 0) return;
+      timerEl = createTimerEl(seconds);
+      document.querySelector('a-scene').appendChild(timerEl);
+
+      let remaining = seconds;
+      timerInterval = setInterval(() => {
+        remaining--;
+        if (timerEl) {
+          timerEl.querySelector('[troika-text]')
+            .setAttribute('troika-text', 'value', '⏱ ' + remaining);
+        }
+        if (remaining <= 0) {
+          stopTimer();
+          showTimeoutDialog();
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      if (timerEl)       { timerEl.parentNode?.removeChild(timerEl); timerEl = null; }
+    }
+
+    function showTimeoutDialog() {
+      const cam3D = document.querySelector('#cam').getObject3D('camera');
+      const camPos = new THREE.Vector3();
+      cam3D.getWorldPosition(camPos);
+      const forward = new THREE.Vector3(0, 0, -1);
+      forward.applyQuaternion(cam3D.getWorldQuaternion(new THREE.Quaternion()));
+      forward.normalize();
+      const dialogEl = document.querySelector('#timeout-dialog');
+      dialogEl.object3D.position.copy(camPos.clone().add(forward.multiplyScalar(1.5)));
+      dialogEl.object3D.lookAt(camPos);
+      dialogEl.setAttribute('visible', true);
     }
 
     // ── Button-move component ──────────────────────────────────────────────────
@@ -1702,6 +1817,17 @@
         body:    JSON.stringify({ clickSound: null })
       });
       updateClickSoundUI(null);
+    });
+
+    // ── Temporizador — configuração ───────────────────────────────────────────
+    document.getElementById('timer-input').addEventListener('change', async function () {
+      const val = parseInt(this.value, 10);
+      const timerSeconds = (!isNaN(val) && val > 0) ? val : null;
+      await fetch(`/api/scenes/${sceneId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ timerSeconds })
+      });
     });
 
     // ── Upload de imagem na cena ───────────────────────────────────────────────
