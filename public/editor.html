@@ -259,6 +259,21 @@
 
     #timer-input:focus { border-color: rgba(91,156,246,0.5); }
 
+    #timer-target-select {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.85);
+      font-size: 12px;
+      padding: 6px 8px;
+      cursor: pointer;
+      outline: none;
+      margin-top: 6px;
+    }
+
+    #timer-target-select:focus { border-color: rgba(91,156,246,0.5); }
+
     .hidden { display: none !important; }
 
     #bg-picker-overlay {
@@ -420,6 +435,9 @@
       <div class="settings-label">Temporizador (segundos)</div>
       <input type="number" id="timer-input" min="0" max="3600"
              placeholder="0 = sem timer">
+      <select id="timer-target-select">
+        <option value="">— cena ao expirar —</option>
+      </select>
     </div>
 
     <div id="controls">
@@ -604,8 +622,9 @@
     let panelCount         = 0;
     let selectedLabelEl    = null;
     let labelCount         = 0;
-    let timerInterval      = null;
-    let timerEl            = null;
+    let timerInterval        = null;
+    let timerEl              = null;
+    let timerTargetSceneId   = null;
 
     // ── Modo visualização ──────────────────────────────────────────────────────
     function setViewMode(on) {
@@ -705,8 +724,9 @@
       labelCount         = 0;
       pendingDisappearEl = null;
       lastClickedEl      = null;
-      nextSceneId        = null;
-      clickedRequiredIds = new Set();
+      nextSceneId          = null;
+      timerTargetSceneId   = null;
+      clickedRequiredIds   = new Set();
 
       document.querySelectorAll('a-image[drag-move]').forEach(el => el.remove());
       document.querySelectorAll('a-plane[button-move]').forEach(el => el.remove());
@@ -724,7 +744,8 @@
       const scene = await res.json();
 
       sceneId     = scene.id;
-      nextSceneId = scene.nextSceneId || null;
+      nextSceneId        = scene.nextSceneId        || null;
+      timerTargetSceneId = scene.timerTargetSceneId || null;
       document.title = scene.name;
       document.getElementById('scene-name').textContent = scene.name;
 
@@ -789,7 +810,8 @@
       document.querySelector('#hud-close-btn').addEventListener('click', closeClickDialog);
       document.querySelector('#timeout-continue-btn').addEventListener('click', () => {
         document.querySelector('#timeout-dialog').setAttribute('visible', false);
-        if (nextSceneId) loadScene(nextSceneId);
+        const dest = timerTargetSceneId || nextSceneId;
+        if (dest) loadScene(dest);
       });
     });
 
@@ -805,7 +827,8 @@
       const scene = await res.json();
       document.title = scene.name;
       document.getElementById('scene-name').textContent = scene.name;
-      nextSceneId = scene.nextSceneId || null;
+      nextSceneId        = scene.nextSceneId        || null;
+      timerTargetSceneId = scene.timerTargetSceneId || null;
 
       if (params.get('mode') === 'view') {
         setViewMode(true);
@@ -836,13 +859,28 @@
           });
         });
 
-        // Popula seletor de destino dos botões de navegação
-        const btnSel = document.getElementById('btn-target-select');
+        // Popula seletor de destino dos botões de navegação e do temporizador
+        const btnSel   = document.getElementById('btn-target-select');
+        const timerSel = document.getElementById('timer-target-select');
         allScenes.filter(s => s.id !== sceneId).forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s.id;
-          opt.textContent = s.name;
-          btnSel.appendChild(opt);
+          const opt1 = document.createElement('option');
+          opt1.value = s.id;
+          opt1.textContent = s.name;
+          btnSel.appendChild(opt1);
+
+          const opt2 = document.createElement('option');
+          opt2.value = s.id;
+          opt2.textContent = s.name;
+          if (s.id === timerTargetSceneId) opt2.selected = true;
+          timerSel.appendChild(opt2);
+        });
+        timerSel.addEventListener('change', async function () {
+          timerTargetSceneId = this.value || null;
+          await fetch(`/api/scenes/${sceneId}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ timerTargetSceneId })
+          });
         });
       }
 

@@ -130,7 +130,8 @@ app.post('/api/scenes', (req, res) => {
     buttons:      [],
     textPanels:   [],
     labels:       [],
-    timerSeconds: null
+    timerSeconds:      null,
+    timerTargetSceneId: null
   };
   data.scenes.push(scene);
   writeScenes(data);
