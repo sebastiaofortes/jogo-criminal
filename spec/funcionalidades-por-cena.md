@@ -43,14 +43,6 @@ Efeito sonoro reproduzido ao clicar em qualquer objeto da cena.
 - Upload de arquivo de áudio curto
 - Único por cena
 
-### 9. Temporizador
-Countdown regressivo exibido como elemento 3D fixo no ambiente da cena.
-- Duração configurável em segundos no editor (0 ou vazio = sem timer)
-- Contador aparece como plano 3D (`⏱ 60`, `⏱ 59`…) posicionado no espaço
-- Ao chegar a zero: exibe dialog "Tempo esgotado" na frente da câmera
-- Após confirmar, avança automaticamente para a `Próxima cena` predefinida
-- Reinicia automaticamente ao navegar para uma nova cena
-
 ### 7. Próxima cena (progressão automática)
 Define para qual cena o jogador é redirecionado ao coletar todos os objetos marcados como `Necessário para avançar`.
 
@@ -60,6 +52,17 @@ Planos 3D finos com texto de linha única — ideal para títulos, rótulos e fr
 - Texto editável diretamente no editor (campo de texto simples)
 - Visíveis durante toda a cena (não somem)
 - Sem função de navegação (diferente dos botões de navegação)
+
+### 9. Temporizador
+Countdown regressivo exibido como plano 3D fixo no ambiente da cena.
+- Duração configurável em segundos no editor (0 ou vazio = sem timer)
+- Contador aparece como elemento 3D (`⏱ 60`, `⏱ 59`…) posicionado no espaço da cena
+- Ao chegar a zero: exibe dialog "Tempo esgotado" na frente da câmera
+- Ao confirmar, redireciona para a **cena de expiração** — configurável independentemente da progressão por objetos
+- Reinicia automaticamente ao navegar para uma nova cena
+- **Propriedades:**
+  - `Duração` — número de segundos do countdown
+  - `Cena ao expirar` — destino exclusivo do temporizador, independente da `Próxima cena`
 
 ---
 
@@ -79,6 +82,14 @@ Planos 3D finos com texto de linha única — ideal para títulos, rótulos e fr
 | Botão de navegação | 2 × 0.5 | Link para outra cena |
 | Painel de texto | 2 × 1.2 | Texto longo, documentos, laudos |
 
+## Referência rápida — mecanismos de navegação
+
+| Mecanismo | Gatilho | Destino configurável |
+|---|---|---|
+| Botão de navegação | Clique manual do jogador | `Destino` do botão |
+| Próxima cena | Coleta de todos os objetos obrigatórios | `Próxima cena` da cena |
+| Temporizador | Countdown chega a zero | `Cena ao expirar` do temporizador |
+
 ---
 
 ## Considerações de design
@@ -86,4 +97,5 @@ Planos 3D finos com texto de linha única — ideal para títulos, rótulos e fr
 - **Pistas obrigatórias vs opcionais:** Nem toda pista precisa ser `Necessário para avançar`. Pistas opcionais enriquecem a narrativa sem bloquear o progresso.
 - **Som de clique:** Recomendado usar sons diferentes por tipo de cena (coleta vs leitura de documento).
 - **Textos longos:** Painéis de texto são mais adequados que a descrição de objeto para conteúdo com mais de 3 linhas.
-- **Progressão:** A propriedade `Próxima cena` define redirecionamento automático; botões de navegação permitem transições manuais — podem coexistir na mesma cena.
+- **Progressão:** A propriedade `Próxima cena` define redirecionamento por coleta; botões de navegação permitem transições manuais; o temporizador redireciona por tempo — os três mecanismos podem coexistir na mesma cena.
+- **Temporizador:** Use `Cena ao expirar` diferente da `Próxima cena` para criar rotas alternativas — por exemplo, uma cena de falha quando o tempo esgota e uma cena de sucesso quando todos os objetos são coletados.
